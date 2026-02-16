@@ -14,7 +14,6 @@ install_manifest.txt
 compile_commands.json
 android/app/.cxx
 
-
 # IDE files
 .vscode/
 .idea/
@@ -41,6 +40,13 @@ android/app/debug/
 *.apk
 *.aab
 
+# Android build artifacts and intermediates
+android/app/.externalNativeBuild/
+android/app/build/intermediates/
+android/app/build/generated/
+android/app/build/outputs/
+android/app/build/tmp/
+
 # C/C++ compiled files
 *.o
 *.a
@@ -65,3 +71,15 @@ android/app/debug/
 
 # Dependencies
 node_modules/
+
+# GStreamer binaries (users need to download/install separately)
+gstreamer-1.0-android-universal-*/
+*.tar.xz
+*.tar.gz
+
+# Android Gradle wrapper jar (can be regenerated)
+android/gradle/wrapper/gradle-wrapper.jar
+
+# Git-specific temporary files
+*.orig
+*.rej

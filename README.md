@@ -9,6 +9,7 @@ Real-time image to ASCII conversion using GStreamer and C++.
 - Configurable output dimensions
 - GStreamer pipeline integration
 - Processing prototype for algorithm verification
+- Android app with camera capture and RTSP streaming
 
 ## Prerequisites (macOS with Homebrew)
 
@@ -18,8 +19,17 @@ brew install cmake gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad g
 
 ## Building
 
+### Desktop (macOS/Linux)
 ```bash
 ./build.sh
+```
+
+### Android
+1. Download GStreamer Android universal binaries from https://gstreamer.freedesktop.org/download/ and extract to the project root directory (e.g., `gstreamer-1.0-android-universal-1.28.0/`)
+2. Build the Android project:
+```bash
+cd android
+./gradlew assembleDebug
 ```
 
 ## Running

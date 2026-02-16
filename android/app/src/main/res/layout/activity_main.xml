@@ -5,9 +5,38 @@
     android:orientation="vertical"
     android:background="#000000">
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:background="#333333">
+
+        <Button
+            android:id="@+id/stream_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Start Streaming"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#FF6600" />
+
+        <TextView
+            android:id="@+id/stream_status"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginLeft="16dp"
+            android:text="Stream: Stopped"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:gravity="center_vertical" />
+
+    </LinearLayout>
+
     <SurfaceView
         android:id="@+id/surface_view"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="0dp"
+        android:layout_weight="1" />
 
 </LinearLayout>

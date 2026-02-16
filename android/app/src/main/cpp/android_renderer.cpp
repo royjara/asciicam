@@ -60,7 +60,14 @@ AndroidRenderer::AndroidRenderer()
     , color_r_(1.0f)
     , color_g_(1.0f)
     , color_b_(1.0f)
-    , color_a_(1.0f) {
+    , color_a_(1.0f)
+    , streaming_enabled_(false)
+    , stream_fbo_(0)
+    , stream_texture_(0)
+    , stream_renderbuffer_(0)
+    , stream_width_(0)
+    , stream_height_(0)
+    , stream_buffer_(nullptr) {
 }
 
 AndroidRenderer::~AndroidRenderer() {
@@ -473,4 +480,174 @@ void AndroidRenderer::shutdown() {
     context_ = EGL_NO_CONTEXT;
     surface_ = EGL_NO_SURFACE;
     initialized_ = false;
+
+    disableStreaming();
+}
+
+// Streaming support implementation
+bool AndroidRenderer::enableStreaming(int stream_width, int stream_height) {
+    if (!initialized_) {
+        LOGE("Renderer not initialized");
+        return false;
+    }
+
+    if (streaming_enabled_) {
+        disableStreaming();
+    }
+
+    stream_width_ = stream_width;
+    stream_height_ = stream_height;
+
+    if (!createStreamingFBO(stream_width, stream_height)) {
+        LOGE("Failed to create streaming FBO");
+        return false;
+    }
+
+    // Allocate RGB buffer for frame capture
+    size_t buffer_size = stream_width * stream_height * 3; // RGB
+    stream_buffer_ = new uint8_t[buffer_size];
+
+    streaming_enabled_ = true;
+    LOGI("Streaming enabled: %dx%d", stream_width, stream_height);
+    return true;
+}
+
+void AndroidRenderer::disableStreaming() {
+    if (!streaming_enabled_) {
+        return;
+    }
+
+    destroyStreamingFBO();
+
+    if (stream_buffer_) {
+        delete[] stream_buffer_;
+        stream_buffer_ = nullptr;
+    }
+
+    streaming_enabled_ = false;
+    LOGI("Streaming disabled");
+}
+
+bool AndroidRenderer::createStreamingFBO(int width, int height) {
+    // Generate framebuffer
+    glGenFramebuffers(1, &stream_fbo_);
+    glBindFramebuffer(GL_FRAMEBUFFER, stream_fbo_);
+
+    // Create texture for color attachment
+    glGenTextures(1, &stream_texture_);
+    glBindTexture(GL_TEXTURE_2D, stream_texture_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, stream_texture_, 0);
+
+    // Create renderbuffer for depth
+    glGenRenderbuffers(1, &stream_renderbuffer_);
+    glBindRenderbuffer(GL_RENDERBUFFER, stream_renderbuffer_);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, stream_renderbuffer_);
+
+    // Check framebuffer completeness
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        LOGE("Streaming framebuffer not complete!");
+        destroyStreamingFBO();
+        return false;
+    }
+
+    // Restore default framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    checkGLError("createStreamingFBO");
+
+    return true;
+}
+
+void AndroidRenderer::destroyStreamingFBO() {
+    if (stream_fbo_) {
+        glDeleteFramebuffers(1, &stream_fbo_);
+        stream_fbo_ = 0;
+    }
+    if (stream_texture_) {
+        glDeleteTextures(1, &stream_texture_);
+        stream_texture_ = 0;
+    }
+    if (stream_renderbuffer_) {
+        glDeleteRenderbuffers(1, &stream_renderbuffer_);
+        stream_renderbuffer_ = 0;
+    }
+}
+
+void AndroidRenderer::renderForStreaming(const std::string& red_layer, const std::string& green_layer, const std::string& blue_layer) {
+    if (!streaming_enabled_) {
+        return;
+    }
+
+    // Save current viewport
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+
+    // Bind streaming framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, stream_fbo_);
+    glViewport(0, 0, stream_width_, stream_height_);
+
+    // Clear
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    // Calculate scale and position for streaming resolution
+    float scale = 1.5f; // Same as main rendering
+    float base_x = 50.0f * (float)stream_width_ / (float)width_;
+    float base_y = 150.0f * (float)stream_height_ / (float)height_;
+
+    // Render ASCII layers
+    renderAsciiLayers(red_layer, green_layer, blue_layer, base_x, base_y, scale);
+
+    // Restore viewport and framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+
+    checkGLError("renderForStreaming");
+}
+
+void AndroidRenderer::renderAsciiLayers(const std::string& red_layer, const std::string& green_layer, const std::string& blue_layer, float base_x, float base_y, float scale) {
+    if (!red_layer.empty()) {
+        // Render red layer
+        setColor(1.0f, 0.0f, 0.0f, 0.7f);
+        renderText(red_layer, base_x, base_y, scale);
+
+        // Render green layer with slight offset
+        setColor(0.0f, 1.0f, 0.0f, 0.7f);
+        renderText(green_layer, base_x + 2.0f, base_y + 2.0f, scale);
+
+        // Render blue layer with slight offset
+        setColor(0.0f, 0.0f, 1.0f, 0.7f);
+        renderText(blue_layer, base_x + 4.0f, base_y + 4.0f, scale);
+    }
+}
+
+bool AndroidRenderer::captureFrameBuffer(uint8_t* buffer, int width, int height) {
+    if (!streaming_enabled_ || !stream_buffer_ || width != stream_width_ || height != stream_height_) {
+        return false;
+    }
+
+    // Bind streaming framebuffer for reading
+    glBindFramebuffer(GL_FRAMEBUFFER, stream_fbo_);
+
+    // Read pixels (RGBA format)
+    uint8_t* rgba_buffer = new uint8_t[width * height * 4];
+    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgba_buffer);
+
+    // Convert RGBA to RGB
+    for (int i = 0; i < width * height; i++) {
+        buffer[i * 3 + 0] = rgba_buffer[i * 4 + 0]; // R
+        buffer[i * 3 + 1] = rgba_buffer[i * 4 + 1]; // G
+        buffer[i * 3 + 2] = rgba_buffer[i * 4 + 2]; // B
+    }
+
+    delete[] rgba_buffer;
+
+    // Restore default framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    checkGLError("captureFrameBuffer");
+    return true;
 }

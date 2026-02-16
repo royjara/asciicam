@@ -24,6 +24,13 @@ public:
     int getWidth() const { return width_; }
     int getHeight() const { return height_; }
 
+    // Streaming support
+    bool enableStreaming(int stream_width, int stream_height);
+    void disableStreaming();
+    bool isStreamingEnabled() const { return streaming_enabled_; }
+    bool captureFrameBuffer(uint8_t* buffer, int width, int height);
+    void renderForStreaming(const std::string& red_layer, const std::string& green_layer, const std::string& blue_layer);
+
 private:
     EGLDisplay display_;
     EGLConfig config_;
@@ -41,8 +48,21 @@ private:
 
     float color_r_, color_g_, color_b_, color_a_;
 
+    // Streaming support
+    bool streaming_enabled_;
+    GLuint stream_fbo_;
+    GLuint stream_texture_;
+    GLuint stream_renderbuffer_;
+    int stream_width_, stream_height_;
+    uint8_t* stream_buffer_;
+
     bool initializeEGL();
     bool createShaders();
     void createCharacterAtlas();
     void renderCharacter(char c, float x, float y, float scale);
+
+    // Streaming helpers
+    bool createStreamingFBO(int width, int height);
+    void destroyStreamingFBO();
+    void renderAsciiLayers(const std::string& red_layer, const std::string& green_layer, const std::string& blue_layer, float base_x, float base_y, float scale);
 };
